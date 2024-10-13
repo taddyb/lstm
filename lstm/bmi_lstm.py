@@ -233,7 +233,7 @@ class bmi_LSTM(Bmi):
     #------------------------------------------------------------
 
     #-------------------------------------------------------------------
-    def initialize( self, bmi_cfg_file=None ):
+    def initialize( self, bmi_cfg_file=None):
         #NJF ensure this is a Path type so the follow open works as expected
         #When used with NGen, the bmi_cfg_file is just a string...
 
@@ -292,6 +292,18 @@ class bmi_LSTM(Bmi):
         else:
             str1 = self.cfg_train['run_dir'] + '/' + 'model_epoch{}.pt'
             trained_model_file = str1.format(str(self.cfg_train['epochs']).zfill(3))
+            
+        scaler_file = os.path.join(self.cfg_train['run_dir'], 'train_data', 'train_data_scaler.yml')
+
+        # ------------ Load in the scalar data ----------------------------#
+        # Code from Austin Raney to load in the scaler data
+        with open(scaler_file, 'r') as f:
+            scaler_data = yaml.safe_load(f) 
+
+        self.attribute_means = scaler_data.get('attribute_means', {})
+        self.attribute_stds = scaler_data.get('attribute_stds', {})
+        self.feature_scale = {k: v['data'] for k, v in scaler_data['xarray_feature_scale']['data_vars'].items()}     
+        self.feature_center = {k: v['data'] for k, v in scaler_data['xarray_feature_center']['data_vars'].items()} 
 
         ## trained_model_file = self.cfg_train['run_dir'] / 'model_epoch{}.pt'.format(str(self.cfg_train['epochs']).zfill(3))
         trained_state_dict = torch.load(trained_model_file, map_location=torch.device('cpu'))
