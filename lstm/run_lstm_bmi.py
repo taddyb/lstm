@@ -15,10 +15,11 @@ import bmi_lstm
 #bmi_cfg_file=Path('./bmi_config_files/01022500_hourly_all_attributes_forcings.yml')
 USE_PATH = True
 run_dir = Path.cwd().parent
+basin_num = '03010655'
 # bmi_cfg_file  = run_dir  / 'bmi_config_files/01022500_hourly_slope_mean_precip_temp.yml'
-bmi_cfg_file  = run_dir  / 'bmi_config_files/01013500_hourly_aorc.yml'
+bmi_cfg_file  = run_dir  / f'bmi_config_files/{basin_num}_hourly_aorc.yml'
 # sample_data_file = run_dir + 'data/usgs-streamflow-nldas_hourly.nc'
-sample_data_file = run_dir / 'data/aorc_hourly/01013500_1980_to_2024_agg_rounded.csv'
+sample_data_file = run_dir / f'data/aorc_hourly/{basin_num}_1980_to_2024_agg_rounded.csv'
 
 # creating an instance of an LSTM model
 print('Creating an instance of an BMI_LSTM model object')
