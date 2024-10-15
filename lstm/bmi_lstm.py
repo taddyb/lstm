@@ -4,6 +4,7 @@ import time
 # Import data_tools
 # Basic utilities
 import numpy as np
+import os
 import pandas as pd
 import pickle
 from pathlib import Path 
@@ -100,16 +101,16 @@ class bmi_LSTM(Bmi):
                                 #NJF Let the model assume equivalence of `kg m-2` == `mm h-1` since we can't convert
                                 #mass flux automatically from the ngen framework
                                 #'atmosphere_water__time_integral_of_precipitation_mass_flux':['total_precipitation','kg m-2'],
-                                'atmosphere_water__liquid_equivalent_precipitation_rate':['total_precipitation','mm h-1'],
+                                'atmosphere_water__liquid_equivalent_precipitation_rate':['APCP_surface','mm h-1'],
                                 ## 'atmosphere_water__liquid_equivalent_precipitation_rate':['precip', 'mm h-1'], ##### SDP
                                 ## 'atmosphere_water__time_integral_of_precipitation_mass_flux':['total_precipitation','mm h-1'],
-                                'land_surface_radiation~incoming~longwave__energy_flux':['longwave_radiation','W m-2'],
-                                'land_surface_radiation~incoming~shortwave__energy_flux':['shortwave_radiation','W m-2'],
-                                'atmosphere_air_water~vapor__relative_saturation':['specific_humidity','kg kg-1'],
-                                'land_surface_air__pressure':['pressure','Pa'],
-                                'land_surface_air__temperature':['temperature','degC'],
-                                'land_surface_wind__x_component_of_velocity':['wind_u','m s-1'],
-                                'land_surface_wind__y_component_of_velocity':['wind_v','m s-1'],
+                                'land_surface_radiation~incoming~longwave__energy_flux':['DLWRF_surface','W m-2'],
+                                'land_surface_radiation~incoming~shortwave__energy_flux':['DSWRF_surface','W m-2'],
+                                'atmosphere_air_water~vapor__relative_saturation':['SPFH_2maboveground','kg kg-1'],
+                                'land_surface_air__pressure':['PRES_surface','Pa'],
+                                'land_surface_air__temperature':['TMP_2maboveground','degC'],
+                                'land_surface_wind__x_component_of_velocity':['UGRD_10maboveground','m s-1'],
+                                'land_surface_wind__y_component_of_velocity':['VGRD_10maboveground','m s-1'],
                                 #--------------   STATIC Attributes -----------------------------
                                 'basin__area':['area_gages2','km2'],
                                 'ratio__mean_potential_evapotranspiration__mean_precipitation':['aridity','-'],
@@ -292,18 +293,6 @@ class bmi_LSTM(Bmi):
         else:
             str1 = self.cfg_train['run_dir'] + '/' + 'model_epoch{}.pt'
             trained_model_file = str1.format(str(self.cfg_train['epochs']).zfill(3))
-            
-        scaler_file = os.path.join(self.cfg_train['run_dir'], 'train_data', 'train_data_scaler.yml')
-
-        # ------------ Load in the scalar data ----------------------------#
-        # Code from Austin Raney to load in the scaler data
-        with open(scaler_file, 'r') as f:
-            scaler_data = yaml.safe_load(f) 
-
-        self.attribute_means = scaler_data.get('attribute_means', {})
-        self.attribute_stds = scaler_data.get('attribute_stds', {})
-        self.feature_scale = {k: v['data'] for k, v in scaler_data['xarray_feature_scale']['data_vars'].items()}     
-        self.feature_center = {k: v['data'] for k, v in scaler_data['xarray_feature_center']['data_vars'].items()} 
 
         ## trained_model_file = self.cfg_train['run_dir'] / 'model_epoch{}.pt'.format(str(self.cfg_train['epochs']).zfill(3))
         trained_state_dict = torch.load(trained_model_file, map_location=torch.device('cpu'))
@@ -426,35 +415,28 @@ class bmi_LSTM(Bmi):
         
         # Scaler data from the training set. This is used to normalize the data (input and output).
         if (USE_PATH):   # (SDP)
-            with open(self.cfg_train['run_dir'] / 'train_data' / 'train_data_scaler.p', 'rb') as fb:
-                self.train_data_scaler = pickle.load(fb)
+            with open(self.cfg_train['run_dir'] / 'train_data' / 'train_data_scaler.yml', 'r') as f:
+                self.train_data_scaler = yaml.safe_load(f)
         else:
-            p_file = self.cfg_train['run_dir'] + '/train_data/' + 'train_data_scaler.p'  # SDP
-            p_file = p_file.replace('./', os.getcwd() + '/')
-            # print('p_file =', p_file)
-            # print('type(p_file) =', type(p_file))
-            # print()
-            with open(p_file,'rb') as fb:
-                self.train_data_scaler = pickle.load(fb)
-                
-#         with open(self.cfg_train['run_dir'] / 'train_data' / 'train_data_scaler.p', 'rb') as fb:
-#             self.train_data_scaler = pickle.load(fb)
+            scaler_file = os.path.join(self.cfg_train['run_dir'], 'train_data', 'train_data_scaler.yml')
+            with open(scaler_file, 'r') as f:
+                self.train_data_scaler = yaml.safe_load(f) 
 
     #------------------------------------------------------------ 
     def get_scaler_values(self):
 
         """Mean and standard deviation for the inputs and LSTM outputs""" 
 
-        self.out_mean = self.train_data_scaler['xarray_feature_center'][self.cfg_train['target_variables'][0]].values
-        self.out_std = self.train_data_scaler['xarray_feature_scale'][self.cfg_train['target_variables'][0]].values
+        self.out_mean = self.train_data_scaler['xarray_feature_center']['data_vars'][self.cfg_train['target_variables'][0]]['data']
+        self.out_std = self.train_data_scaler['xarray_feature_scale']['data_vars'][self.cfg_train['target_variables'][0]]['data']
 
         self.input_mean = []
-        self.input_mean.extend([self.train_data_scaler['xarray_feature_center'][x].values for x in self.cfg_train['dynamic_inputs']])
+        self.input_mean.extend([self.train_data_scaler['xarray_feature_center']['data_vars'][x]['data'] for x in self.cfg_train['dynamic_inputs']])
         self.input_mean.extend([self.train_data_scaler['attribute_means'][x] for x in self.cfg_train['static_attributes']])
         self.input_mean = np.array(self.input_mean)
 
         self.input_std = []
-        self.input_std.extend([self.train_data_scaler['xarray_feature_scale'][x].values for x in self.cfg_train['dynamic_inputs']])
+        self.input_std.extend([self.train_data_scaler['xarray_feature_scale']['data_vars'][x]['data'] for x in self.cfg_train['dynamic_inputs']])
         self.input_std.extend([self.train_data_scaler['attribute_stds'][x] for x in self.cfg_train['static_attributes']]) 
         self.input_std = np.array(self.input_std)
 
@@ -519,12 +501,15 @@ class bmi_LSTM(Bmi):
 
     #------------------------------------------------------------ 
     def scale_output(self):
-
-        if self.cfg_train['target_variables'][0] == 'qobs_mm_per_hour':
+        if self.cfg_train['target_variables'][0] == 'QObs(mm/h)':
             self.surface_runoff_mm = (self.lstm_output[0,0,0].numpy().tolist() * self.out_std + self.out_mean)
 
         elif self.cfg_train['target_variables'][0] == 'QObs(mm/d)':
             self.surface_runoff_mm = (self.lstm_output[0,0,0].numpy().tolist() * self.out_std + self.out_mean) * (1/24)
+        
+        else:
+            print("Error: The target variable is not recognized. Please check the configuration file.")
+            raise ValueError
             
         # Bound the runoff to zero or obs, as negative values are illogical
         #if self.surface_runoff_mm < 0.0: self.surface_runoff_mm = 0.0

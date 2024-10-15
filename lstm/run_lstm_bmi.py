@@ -1,7 +1,9 @@
-
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import torch
 from torch import nn
+
 #import data_tools
 from pathlib import Path
 from netCDF4 import Dataset
@@ -12,9 +14,11 @@ import bmi_lstm
 # Define primary bmi config and input data file paths 
 #bmi_cfg_file=Path('./bmi_config_files/01022500_hourly_all_attributes_forcings.yml')
 USE_PATH = True
-run_dir = './'
-bmi_cfg_file  = run_dir + 'bmi_config_files/01022500_hourly_slope_mean_precip_temp.yml'
-sample_data_file = run_dir + 'data/usgs-streamflow-nldas_hourly.nc'
+run_dir = Path.cwd().parent
+# bmi_cfg_file  = run_dir  / 'bmi_config_files/01022500_hourly_slope_mean_precip_temp.yml'
+bmi_cfg_file  = run_dir  / 'bmi_config_files/01013500_hourly_aorc.yml'
+# sample_data_file = run_dir + 'data/usgs-streamflow-nldas_hourly.nc'
+sample_data_file = run_dir / 'data/aorc_hourly/01013500_1980_to_2024_agg_rounded.csv'
 
 # creating an instance of an LSTM model
 print('Creating an instance of an BMI_LSTM model object')
@@ -26,27 +30,51 @@ model.initialize(bmi_cfg_file)
 
 # Get input data that matches the LSTM test runs
 print('Gathering input data')
-sample_data = Dataset(sample_data_file, 'r')
+# sample_data = Dataset(sample_data_file, 'r')
+sample_data = pd.read_csv(sample_data_file)
+
+# model._var_name_units_map["land_surface_radiation~incoming~longwave__energy_flux"] = ['DLWRF_surface','W m-2']
+# model._var_name_units_map["land_surface_air__pressure"] = ['PRES_surface','Pa'],
+# model._var_name_units_map["atmosphere_air_water~vapor__relative_saturation"] = ['SPFH_2maboveground','kg kg-1']
+# model._var_name_units_map["atmosphere_water__liquid_equivalent_precipitation_rate"] = ['APCP_surface','mm h-1']
+# model._var_name_units_map["land_surface_radiation~incoming~shortwave__energy_flux"] = ['DSWRF_surface','W m-2']
+# model._var_name_units_map["land_surface_air__temperature"] = ['TMP_2maboveground','degC'],
+# model._var_name_units_map["land_surface_wind__x_component_of_velocity"] = ['UGRD_10maboveground','m s-1'],
+# model._var_name_units_map["land_surface_wind__y_component_of_velocity"] = ['VGRD_10maboveground','m s-1'],
+
 
 # Now loop through the inputs, set the forcing values, and update the model
 print('Set values & update model for number of timesteps = 100')
-for precip, temp in zip(list(sample_data['total_precipitation'][3].data),
-                        list(sample_data['temperature'][3].data)):
-
-    #model.set_value('atmosphere_water__time_integral_of_precipitation_mass_flux',np.atleast_1d(precip))
+for i, (DLWRF, PRES, SPFH, precip, DSWRF, temp, UGRD, VGRD) in enumerate(zip(
+    list(sample_data['DLWRF_surface'].values),
+    list(sample_data['PRES_surface'].values),
+    list(sample_data['SPFH_2maboveground'].values),
+    list(sample_data['APCP_surface'].values),
+    list(sample_data['DSWRF_surface'].values),
+    list(sample_data['TMP_2maboveground'].values),
+    list(sample_data['UGRD_10maboveground'].values),
+    list(sample_data['VGRD_10maboveground'].values)
+)):
+    model.set_value('land_surface_radiation~incoming~longwave__energy_flux',np.atleast_1d(DLWRF))
+    model.set_value('land_surface_air__pressure',np.atleast_1d(PRES))
+    model.set_value('atmosphere_air_water~vapor__relative_saturation',np.atleast_1d(SPFH))
     model.set_value('atmosphere_water__liquid_equivalent_precipitation_rate',np.atleast_1d(precip))
+    model.set_value('land_surface_radiation~incoming~shortwave__energy_flux',np.atleast_1d(DSWRF))
     model.set_value('land_surface_air__temperature',np.atleast_1d(temp))
+    model.set_value('land_surface_wind__x_component_of_velocity',np.atleast_1d(UGRD))
+    model.set_value('land_surface_wind__y_component_of_velocity',np.atleast_1d(VGRD))
 
-    #dest_array = np.zeros(1)
-    #model.get_value('land_surface_air__temperature', dest_array)
-    #temps = dest_array[0]
-    #model.get_value('atmosphere_water__time_integral_of_precipitation_mass_flux', dest_array)
-    #model.get_value('atmosphere_water__liquid_equivalent_precipitation_rate', dest_array)
-    #precips = dest_array[0]
-
-    #print(' Temperature and precipitation are set to {:.2f} and {:.2f}'.format(temperature, precip))
-    print(' Temperature and precipitation are set to {:.2f} and {:.2f}'.format(temp, precip))
-    #model.update_until(model.t+model._time_step_size)
+    print(f"""
+    Values set in the model:
+    DLWRF (Downward Long Wave Radiation Flux): {DLWRF:.2f}
+    PRES (Surface Pressure): {PRES:.2f}
+    SPFH (Specific Humidity): {SPFH:.2f}
+    precip (Precipitation): {precip:.2f}
+    DSWRF (Downward Short Wave Radiation Flux): {DSWRF:.2f}
+    temp (Temperature): {temp:.2f}
+    UGRD (U-component of wind): {UGRD:.2f}
+    VGRD (V-component of wind): {VGRD:.2f}
+    """)
     model.update()
 
     dest_array = np.zeros(1)

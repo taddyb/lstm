@@ -1,0 +1,11 @@
+time_step: '1 hour'
+initial_state: 'zero'
+basin_name: Oswayo Creek at Shinglehouse, PA
+basin_id: 03010655
+area_sqkm: 254.44
+lat: 41.96173
+lon: -78.19807
+train_cfg_file: ../trained_neuralhydrology_models/hourly_aorc/config.yml
+verbose: 0
+elev_mean: 635.06
+slope_mean: 32.95227
