@@ -67,13 +67,13 @@ class bmi_LSTM(Bmi):
     # Input variable names (CSDMS standard names)
     #---------------------------------------------
     _input_var_names = [
+        'atmosphere_water__liquid_equivalent_precipitation_rate',  ### SDP, 08/30/22
+        'land_surface_air__temperature',
         'land_surface_radiation~incoming~longwave__energy_flux',
+        'land_surface_radiation~incoming~shortwave__energy_flux',
         'land_surface_air__pressure',
         'atmosphere_air_water~vapor__relative_saturation',
-        'atmosphere_water__liquid_equivalent_precipitation_rate',  ### SDP, 08/30/22
         ##### 'atmosphere_water__time_integral_of_precipitation_mass_flux',  #### SDP
-        'land_surface_radiation~incoming~shortwave__energy_flux',
-        'land_surface_air__temperature',
         'land_surface_wind__x_component_of_velocity',
         'land_surface_wind__y_component_of_velocity']
     # (Next line didn't fix ngen pointer error)
@@ -95,52 +95,21 @@ class bmi_LSTM(Bmi):
     #------------------------------------------------------
     #_var_name_map_long_first = {
     _var_name_units_map = {
-                                'land_surface_water__runoff_volume_flux':['streamflow_cms','m3 s-1'],
-                                'land_surface_water__runoff_depth':['streamflow_m','m'],
-                                #--------------   Dynamic inputs --------------------------------
-                                #NJF Let the model assume equivalence of `kg m-2` == `mm h-1` since we can't convert
-                                #mass flux automatically from the ngen framework
-                                #'atmosphere_water__time_integral_of_precipitation_mass_flux':['total_precipitation','kg m-2'],
-                                'atmosphere_water__liquid_equivalent_precipitation_rate':['APCP_surface','mm h-1'],
-                                ## 'atmosphere_water__liquid_equivalent_precipitation_rate':['precip', 'mm h-1'], ##### SDP
-                                ## 'atmosphere_water__time_integral_of_precipitation_mass_flux':['total_precipitation','mm h-1'],
-                                'land_surface_radiation~incoming~longwave__energy_flux':['DLWRF_surface','W m-2'],
-                                'land_surface_radiation~incoming~shortwave__energy_flux':['DSWRF_surface','W m-2'],
-                                'atmosphere_air_water~vapor__relative_saturation':['SPFH_2maboveground','kg kg-1'],
-                                'land_surface_air__pressure':['PRES_surface','Pa'],
-                                'land_surface_air__temperature':['TMP_2maboveground','degC'],
-                                'land_surface_wind__x_component_of_velocity':['UGRD_10maboveground','m s-1'],
-                                'land_surface_wind__y_component_of_velocity':['VGRD_10maboveground','m s-1'],
-                                #--------------   STATIC Attributes -----------------------------
-                                'basin__area':['area_gages2','km2'],
-                                'ratio__mean_potential_evapotranspiration__mean_precipitation':['aridity','-'],
-                                'basin__carbonate_rocks_area_fraction':['carbonate_rocks_frac','-'],
-                                'soil_clay__volume_fraction':['clay_frac','percent'],
-                                'basin__mean_of_elevation':['elev_mean','m'],
-                                'land_vegetation__forest_area_fraction':['frac_forest','-'],
-                                'atmosphere_water__precipitation_falling_as_snow_fraction':['frac_snow','-'],
-                                'bedrock__permeability':['geol_permeability','m2'],
-                                'land_vegetation__max_monthly_mean_of_green_vegetation_fraction':['gvf_max','-'],
-                                'land_vegetation__diff__max_min_monthly_mean_of_green_vegetation_fraction':['gvf_diff','-'],
-                                'atmosphere_water__mean_duration_of_high_precipitation_events':['high_prec_dur','d'],
-                                'atmosphere_water__frequency_of_high_precipitation_events':['high_prec_freq','d yr-1'],
-                                'land_vegetation__diff_max_min_monthly_mean_of_leaf-area_index':['lai_diff','-'],
-                                'land_vegetation__max_monthly_mean_of_leaf-area_index':['lai_max','-'],
-                                'atmosphere_water__low_precipitation_duration':['low_prec_dur','d'],
-                                'atmosphere_water__precipitation_frequency':['low_prec_freq','d yr-1'],
-                                'maximum_water_content':['max_water_content','m'],
-                                'atmosphere_water__daily_mean_of_liquid_equivalent_precipitation_rate':['p_mean','mm d-1'],
-                                'land_surface_water__daily_mean_of_potential_evaporation_flux':['pet_mean','mm d-1'],
-                                'basin__mean_of_slope':['slope_mean','m km-1'],
-                                'soil__saturated_hydraulic_conductivity':['soil_conductivity','cm hr-1'],
-                                'soil_bedrock_top__depth__pelletier':['soil_depth_pelletier','m'],
-                                'soil_bedrock_top__depth__statsgo':['soil_depth_statsgo','m'],
-                                'soil__porosity':['soil_porosity','-'],
-                                'soil_sand__volume_fraction':['sand_frac','percent'],
-                                'soil_silt__volume_fraction':['silt_frac','percent'], 
-                                'basin_centroid__latitude':['gauge_lat', 'degrees'],
-                                'basin_centroid__longitude':['gauge_lon', 'degrees']
-                                 }
+        'land_surface_water__runoff_volume_flux':['streamflow_cms','m3 s-1'],
+        'land_surface_water__runoff_depth':['streamflow_m','m'],
+        #--------------   Dynamic inputs --------------------------------
+        'atmosphere_water__liquid_equivalent_precipitation_rate':['APCP_surface','mm h-1'],
+        'land_surface_air__temperature':['TMP_2maboveground','degC'],
+        'land_surface_radiation~incoming~longwave__energy_flux':['DLWRF_surface','W m-2'],
+        'land_surface_radiation~incoming~shortwave__energy_flux':['DSWRF_surface','W m-2'],
+        'land_surface_air__pressure':['PRES_surface','Pa'],
+        'atmosphere_air_water~vapor__relative_saturation':['SPFH_2maboveground','kg kg-1'],
+        'land_surface_wind__x_component_of_velocity':['UGRD_10maboveground','m s-1'],
+        'land_surface_wind__y_component_of_velocity':['VGRD_10maboveground','m s-1'],
+        #--------------   STATIC Attributes -----------------------------
+        'basin__mean_of_elevation':['elev_mean','m'],
+        'basin__mean_of_slope':['slope_mean','m km-1'],
+    }
 
     #------------------------------------------------------
     # A list of static attributes. Not all these need to be used.
@@ -330,7 +299,11 @@ class bmi_LSTM(Bmi):
     def update(self):
         with torch.no_grad():
 
-            self.create_scaled_input_tensor()
+            if self.verbose > 0:
+                VERBOSE = True
+            else:
+                VERBOSE = False
+            self.create_scaled_input_tensor(VERBOSE)
 
             self.lstm_output, self.h_t, self.c_t = self.lstm.forward(self.input_tensor, self.h_t, self.c_t)
             
